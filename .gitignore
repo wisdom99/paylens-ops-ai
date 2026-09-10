@@ -1,0 +1,17 @@
+.DS_Store
+.idea/
+.vscode/
+*.iml
+*.log
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+build/
+target/
+.gradle/
+coverage/
+*.pem
+*.key
+kubeconfig*
