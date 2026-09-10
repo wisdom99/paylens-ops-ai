@@ -1,61 +1,115 @@
 # Roadmap
 
-## Phase 1: Build the evidence path
+## Phase 1 — Payment evidence path
 
-Deliver a local Kubernetes demo containing three small services, correlated structured logs, OpenTelemetry instrumentation, and two deterministic MCP tools: `search_logs` and `get_trace`.
+Build synthetic payment API, payment processor, provider adapter, transaction datastore, correlated logs, and OpenTelemetry traces.
+
+Implement:
+
+- `get_transaction`
+- `get_payment_events`
+- `search_logs`
+- `get_trace`
 
 Definition of done:
 
-- A synthetic transaction can be followed across all services.
-- Tool inputs are schema-validated and bounded.
-- Tool responses include stable evidence IDs.
-- Sensitive fixtures are redacted in automated tests.
-- No model is required to reconstruct the timeline.
+- One synthetic transaction can be reconstructed end to end without an LLM.
+- Tool inputs are schema-validated, authorized, and bounded.
+- Tool outputs use the shared evidence contract and stable evidence IDs.
+- Technical and provider states are represented separately.
+- Sensitive fixtures are redacted by automated tests.
 
-## Phase 2: Add bounded AI reasoning
+## Phase 2 — AI-assisted investigation
 
-Pass a minimized evidence bundle to a model and require a validated investigation-report schema.
+Add a provider-neutral model integration and structured investigation-report schema.
 
 Definition of done:
 
 - Every hypothesis cites evidence IDs.
 - Missing evidence produces an explicit uncertainty outcome.
-- Invalid or uncited outputs fail closed.
+- Invalid, uncited, or policy-violating outputs fail closed.
 - Model calls and tool calls are traced.
-- At least ten synthetic incident cases run automatically.
+- At least ten labelled synthetic cases run automatically.
 
-## Phase 3: Improve retrieval and evaluation
+## Phase 3 — Related failure detection
 
-Add metrics, Kubernetes events, relevant runbooks, evidence ranking, adversarial cases, and regression gates.
+Add failure-pattern extraction, bounded transaction correlation, provider/service health comparison, metrics, and deployment-change context.
+
+Implement:
+
+- `get_service_metrics`
+- `get_kubernetes_events`
+- `get_provider_context`
+- `find_related_transactions`
 
 Definition of done:
 
-- At least 25 labelled incident cases.
-- Published baseline measurements.
-- Prompt-injection cases cannot expand permissions or override policy.
-- A model or prompt change cannot merge when agreed quality thresholds regress.
+- PayLens can determine whether an incident is isolated or systemic.
+- Related results are constrained by approved dimensions and time windows.
+- A representative transaction timeline explains the common pattern.
+- Blast-radius claims are reproducible from cited evidence.
 
-## Phase 4: Demonstrate production engineering
+## Phase 4 — Reconciliation intelligence
 
-Add authentication, authorization, audit views, provider configuration, deployment documentation, a small dashboard, and a recorded end-to-end demo.
+Add provider-state comparison, retry and reversal scenarios, settlement records, and deterministic reconciliation rules.
+
+Implement:
+
+- `get_reconciliation_context`
+- provider-status adapters for synthetic services;
+- retry, duplicate, missing-reversal, and settlement-mismatch scenarios.
+
+Definition of done:
+
+- PayLens distinguishes technical failure from financial outcome.
+- Reports represent platform, provider, reversal, and settlement states independently.
+- Ambiguous transactions produce `reconciliation_required` when appropriate.
+
+## Phase 5 — Evaluation and security
+
+Add labelled incident datasets, adversarial log cases, prompt-injection tests, redaction tests, RBAC tests, and quality regression gates.
+
+Measure:
+
+- root-cause accuracy;
+- evidence precision and recall;
+- timeline and payment-state accuracy;
+- related-transaction and reconciliation accuracy;
+- citation validity and unsupported-claim rate;
+- latency and model cost.
+
+Definition of done:
+
+- At least 25 labelled scenarios cover failure, ambiguity, and missing evidence.
+- Prompt injection cannot expand permissions or override policy.
+- Model or prompt changes cannot merge when agreed quality thresholds regress.
+- Published baseline results include known limitations.
+
+## Phase 6 — Portfolio release
+
+Add authentication, authorization, immutable audit history, a minimal investigation dashboard, deployment documentation, and an end-to-end recorded demo.
 
 Definition of done:
 
 - One-command local environment.
-- Documented SLOs and failure handling.
+- Documented SLOs, failure handling, and retention policies.
 - Threat model reviewed against the implementation.
-- Public demo uses synthetic data only.
+- Public demo and datasets use synthetic data only.
 - Versioned `v0.1.0` release.
 
-## First ten implementation issues
+## First implementation issues
 
-1. Record ADR: monorepo modules and build tooling.
+1. Record ADR for monorepo modules and build tooling.
 2. Define evidence and investigation-report JSON schemas.
-3. Build synthetic payment API, processor, and provider adapter.
-4. Add correlation IDs and OpenTelemetry instrumentation.
-5. Create local Kind cluster and observability stack.
-6. Implement the read-only MCP server skeleton.
-7. Implement bounded `search_logs`.
-8. Implement `get_trace` and evidence normalization.
-9. Build deterministic timeline reconstruction.
-10. Create the first five labelled incident scenarios.
+3. Build the synthetic payment API, processor, provider adapter, and transaction store.
+4. Add transaction, correlation, and trace IDs plus OpenTelemetry instrumentation.
+5. Create the local Kind cluster and observability stack.
+6. Implement the read-only MCP server skeleton and common policy envelope.
+7. Implement bounded `get_transaction` and `get_payment_events`.
+8. Implement bounded `search_logs` and `get_trace`.
+9. Build deterministic timeline reconstruction and payment-state comparison.
+10. Create the first five labelled payment investigation scenarios.
+
+## Reference demo
+
+A synthetic provider becomes slow after a deployment and 27 payments time out. PayLens correlates failed records, traces, provider latency, and deployment context; identifies ambiguous transactions; and recommends provider-status, duplicate, and reversal checks. The demo proves payment investigation and impact analysis, not merely log summarization.

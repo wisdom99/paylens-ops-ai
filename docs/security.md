@@ -1,60 +1,103 @@
 # Security and threat model
 
+## Security posture
+
+PayLens is read-only by default. The model never receives unrestricted shell, SQL, Kubernetes, provider, or payment-system access. Every source is exposed through a purpose-built, policy-enforced tool.
+
 ## Protected assets
 
-- Customer and transaction identifiers.
-- Payment-card data and authentication tokens.
+- Transaction and customer identifiers.
+- PANs, CVVs, payment tokens, and authentication material.
 - Personally identifiable information.
+- Provider requests, responses, and credentials.
 - Internal service topology and operational metadata.
-- Credentials, secrets, certificates, and API keys.
-- Incident reports and audit records.
+- Secrets, certificates, API keys, and access tokens.
+- Settlement and reconciliation records.
+- Evidence bundles, investigation reports, and audit records.
 
-## Primary threats
+## Trust boundaries
+
+1. **User to Investigation API:** authenticated, authorized, and audited.
+2. **Investigation API to orchestrator:** original user scope remains attached to the investigation.
+3. **Orchestrator to MCP tools:** each call is independently authorized and bounded.
+4. **MCP tools to sources:** source-specific, read-only credentials and allowlists.
+5. **Evidence processor to model:** only redacted, minimized evidence crosses the boundary.
+6. **Report to user:** output is filtered against the original authorization and validated citations.
+
+## Primary threats and controls
 
 ### Excessive access
 
-A user or model could request logs outside the approved environment, namespace, workload, or time range.
+A user, prompt, or model could request data outside the approved environment, namespace, service, merchant, provider, or time range.
 
-Controls: server-side allowlists, RBAC, authorization checks on every tool call, bounded queries, and audit records.
+Controls: server-side authorization, source and workload allowlists, bounded time windows, result limits, deny-by-default policy, and immutable audit records.
 
 ### Sensitive-data disclosure
 
-Logs may contain PANs, tokens, emails, phone numbers, credentials, or payloads that must not reach a model or user.
+Payment records, logs, traces, or provider payloads may contain regulated or confidential values.
 
-Controls: structured logging standards, layered deterministic redaction, deny patterns, sampling tests, and model invocation only after redaction.
+Controls: structured logging standards, deterministic layered redaction, deny patterns, evidence minimization, automated leakage tests, and model invocation only after redaction.
 
-### Prompt injection in logs
+### Prompt injection in evidence
 
-An attacker may place instructions in request fields or log messages in an attempt to influence the model.
+Logs, provider payloads, runbooks, and external text are untrusted data and may contain instructions intended to manipulate the model.
 
-Controls: treat all retrieved content as untrusted evidence, isolate it from system instructions, prohibit evidence from changing tool policy, validate tool arguments independently, and test adversarial cases.
+Controls: isolate evidence from system policy, prohibit evidence from changing permissions, validate every tool argument outside the model, restrict tool schemas, and test adversarial cases.
 
 ### Unsupported conclusions
 
-The model may invent a cause or remediation that is not supported by evidence.
+The model could invent a cause, financial outcome, blast radius, or remediation.
 
-Controls: evidence IDs, schema validation, claim-to-citation verification, explicit uncertainty outcomes, and human approval before operational action.
+Controls: stable evidence IDs, structured outputs, claim-to-citation validation, deterministic state comparison, explicit uncertainty outcomes, and human approval before any operational action.
 
 ### Tool misuse
 
-A generic shell or Kubernetes tool would allow arbitrary commands or resource access.
+Generic access could expose secrets or mutate production systems.
 
-Controls: expose purpose-built read operations only; prohibit shell execution, secret retrieval, write verbs, and unbounded selectors.
+Controls: no generic shell, SQL, `kubectl`, or provider client; prohibit secret retrieval and write verbs; expose only purpose-built read operations.
 
 ### Denial of service and cost abuse
 
-Large time windows or repeated investigations could overload the cluster, telemetry backend, or model budget.
+Large windows, broad correlation searches, or repeated investigations could overload source systems or model budgets.
 
-Controls: quotas, pagination, concurrency limits, caching, maximum evidence size, model budget limits, and rate limiting.
+Controls: quotas, pagination, caching, concurrency and row limits, evidence-size limits, model budgets, rate limiting, and cancellation deadlines.
 
-## Initial trust boundaries
+### Cross-transaction data leakage
 
-1. Engineer to Investigation API: authenticated, authorized, and audited.
-2. Investigation API to MCP server: service identity and policy-bound tool calls.
-3. MCP server to operational sources: read-only credentials and source-specific permissions.
-4. Evidence processor to model: redacted and minimized evidence only.
-5. Report to engineer: filtered according to the engineer's original authorization.
+Related-transaction searches could expose unrelated merchants or customers.
+
+Controls: carry the initiating authorization scope into correlation queries, aggregate where possible, minimize returned fields, and validate report output against the same scope.
+
+### Integrity and provenance failure
+
+Stale, duplicated, or tampered evidence could produce a misleading investigation.
+
+Controls: source identity, normalized timestamps, deduplication, integrity hashes where applicable, collection timestamps, and audit linkage between evidence and report.
+
+## Prohibited initial actions
+
+Initial PayLens versions must not:
+
+- restart pods or edit deployments;
+- execute arbitrary SQL or shell commands;
+- retrieve Kubernetes Secrets;
+- trigger refunds or reversals;
+- alter transaction or provider state;
+- modify settlement or reconciliation records.
+
+Future production-changing actions require a separate authorization boundary, explicit human approval, idempotency, complete auditability, and independent safety review.
 
 ## Production-readiness gate
 
-No real environment should be connected until the project has automated RBAC tests, redaction tests, audit logging, query limits, documented retention, model-provider data controls, and an approved security review.
+No real environment should be connected until the project has:
+
+- automated authorization and RBAC tests;
+- redaction and sensitive-data leakage tests;
+- prompt-injection and malicious-evidence tests;
+- immutable audit logging;
+- enforced query, time, correlation, and result-size limits;
+- documented retention and deletion policies;
+- approved model-provider data controls;
+- a reviewed threat model and incident response plan.
+
+Public demos use synthetic or explicitly public data only.
