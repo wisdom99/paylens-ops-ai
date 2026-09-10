@@ -1,327 +1,189 @@
 # PayLens Ops AI
 
-**An evidence-first AI incident investigator for Kubernetes and distributed payment systems.**
+**AI-powered payment operations and transaction investigation, grounded in evidence.**
 
-PayLens Ops AI helps engineers investigate production incidents without manually downloading logs from multiple pods or copying fragments into a chat window. It gathers operational evidence through narrowly scoped tools, correlates events across services, redacts sensitive data, and produces a traceable incident analysis with confidence levels and citations back to the source evidence.
+PayLens helps engineers and payment operations teams investigate failed, delayed, duplicated, mismatched, or suspicious transactions by correlating payment records, lifecycle events, logs, traces, provider responses, retries, deployment context, settlement data, reconciliation records, and runbooks.
 
-> Status: design and foundation phase. The initial milestone is a safe, read-only local demo using synthetic payment services and generated Kubernetes logs.
+> **Evidence first, AI second.** The language model is not a source of truth. PayLens uses deterministic processing and tightly scoped, read-only tools to gather and correlate evidence before AI reasoning begins.
 
-## Why this project exists
+> Status: design and foundation phase. The first release will be a safe, read-only local demo built entirely with synthetic payment services and data.
 
-An incident in a distributed system rarely lives in one log file. A single failed payment may pass through an API gateway, authentication service, transaction processor, Kafka consumer, downstream provider, and database. Engineers often have to:
+## Product direction
 
-1. Find the correct cluster, namespace, workload, and time window.
-2. Download or stream logs from several pods.
-3. Search for a transaction, trace, or correlation identifier.
-4. Reconstruct the event timeline manually.
-5. Separate the initiating failure from retries and secondary errors.
-6. Explain the incident while protecting customer and payment data.
+A payment issue is rarely visible in one system. A transaction can cross an API gateway, authentication service, payment processor, message broker, provider adapter, database, retry or reversal workflow, and settlement process.
 
-PayLens Ops AI turns that workflow into a controlled investigation. It does not treat an LLM as the source of truth. Logs, traces, metrics, and runbooks remain the evidence; the model helps retrieve, correlate, and explain them.
+PayLens turns that fragmented investigation into one controlled path:
 
-## Product goals
+1. **Find** — retrieve the transaction and its current state.
+2. **Trace** — reconstruct its journey across systems.
+3. **Investigate** — explain why it failed or behaved unexpectedly.
+4. **Correlate** — identify other transactions affected by the same problem.
+5. **Reconcile** — compare platform, provider, reversal, and settlement states.
+6. **Recommend** — propose the safest next checks or operational action.
 
-- Reduce the time required to gather evidence during an incident.
-- Reconstruct request journeys across pods and services.
-- Produce explanations that cite the exact supporting events.
-- Protect PANs, tokens, credentials, personal data, and internal secrets.
-- Make uncertain or incomplete evidence explicit.
-- Keep production access read-only, scoped, auditable, and revocable.
-- Measure investigation quality, latency, and model cost.
+Initial releases remain read-only and never execute production remediation automatically.
 
-## Non-goals
+## Who it is for
 
-- Replacing engineers, SREs, or formal incident management.
-- Giving an LLM unrestricted shell or Kubernetes access.
-- Executing remediation actions automatically.
-- Training a foundation model.
-- Sending raw production logs to an external model provider.
-- Claiming a root cause when the available evidence is insufficient.
+- **Software engineers and SREs:** locate the initiating failure, distinguish it from secondary errors, identify deployment or dependency changes, and assess blast radius.
+- **Payment operations analysts:** determine the true transaction state, identify platform/provider disagreements, and detect reversal, duplicate, settlement, or reconciliation issues.
 
-## Core user experience
-
-An engineer asks:
+## Example investigation
 
 ```text
 Investigate transaction TXN-938271 between 14:03 and 14:08 UTC.
-Why did it fail, which services were involved, and what should I check next?
+Why did it fail, and are other transactions affected?
 ```
 
-The system returns a structured report:
+PayLens returns a structured report containing:
+
+- a deterministic transaction timeline;
+- platform, provider, reversal, and settlement states;
+- ranked hypotheses linked to evidence IDs;
+- related transactions sharing the same bounded failure pattern;
+- unknowns and missing evidence;
+- safe recommended checks.
 
 ```json
 {
-  "summary": "The authorization request timed out after the downstream provider exceeded its 3-second deadline.",
+  "transactionId": "TXN-938271",
   "status": "probable_cause_identified",
   "confidence": 0.86,
-  "timeline": [
-    {
-      "timestamp": "2026-09-10T14:04:01.120Z",
-      "service": "payment-api",
-      "event": "Authorization request accepted",
-      "evidenceId": "evt-001"
-    },
-    {
-      "timestamp": "2026-09-10T14:04:04.208Z",
-      "service": "provider-adapter",
-      "event": "Downstream request timed out",
-      "evidenceId": "evt-009"
-    }
-  ],
-  "hypotheses": [
-    {
-      "cause": "Downstream provider latency exceeded the configured timeout",
-      "confidence": 0.86,
-      "supportedBy": ["evt-006", "evt-009", "metric-003"]
-    }
-  ],
-  "unknowns": [
-    "No downstream provider trace was available for the requested window"
-  ],
+  "summary": "The authorization timed out after provider latency exceeded the configured deadline.",
+  "paymentState": {
+    "platform": "FAILED",
+    "provider": "UNKNOWN",
+    "settlement": "NOT_APPLICABLE"
+  },
+  "rootCause": {
+    "cause": "Provider latency exceeded timeout",
+    "supportedBy": ["evt-006", "evt-009", "metric-003"]
+  },
+  "relatedTransactions": {
+    "count": 26,
+    "pattern": "provider_timeout"
+  },
+  "unknowns": ["Provider-side transaction state is unavailable"],
   "recommendedChecks": [
-    "Compare provider latency with its SLO for the same time window",
-    "Check whether retries produced a duplicate authorization"
+    "Query provider transaction status",
+    "Check whether retry generated a second authorization"
   ]
 }
 ```
 
-## Planned capabilities
-
-### Evidence collection
-
-- List permitted Kubernetes clusters, namespaces, workloads, and pods.
-- Fetch logs by service, time window, trace ID, correlation ID, or transaction reference.
-- Retrieve previous-container logs for restarted pods.
-- Collect Kubernetes events and selected workload metadata.
-- Query traces and metrics through provider adapters.
-- Retrieve relevant operational runbooks.
-
-### Investigation engine
-
-- Normalize events from different log formats.
-- Correlate identifiers across services.
-- Reconstruct a chronological request journey.
-- Detect timeout, retry, circuit-breaker, dependency, and data-consistency patterns.
-- Generate multiple hypotheses and rank them by evidence.
-- Distinguish observations, inferences, and unknowns.
-- Produce structured, machine-readable reports.
-
-### Safety and governance
-
-- Read-only Kubernetes permissions.
-- Namespace and workload allowlists.
-- Query limits and bounded time windows.
-- Data redaction before model invocation.
-- Prompt-injection-resistant treatment of log content as untrusted data.
-- Audit records for every user query and tool call.
-- Configurable model routing for environments where data must remain internal.
-- No autonomous remediation in the initial releases.
-
-### AI operations
-
-- Evaluation dataset built from synthetic incidents.
-- Retrieval-quality and root-cause-quality metrics.
-- Hallucination and unsupported-claim checks.
-- Model latency, token usage, failure rate, and cost tracking.
-- Regression tests for prompts, tool schemas, and model changes.
-
-## Proposed architecture
+## Architecture
 
 ```mermaid
 flowchart TD
-    U["Engineer"] --> API["Investigation API"]
-    API --> ORCH["Agent orchestrator"]
-    ORCH --> MCP["Read-only MCP tools"]
-    MCP --> K8S["Kubernetes logs and events"]
-    MCP --> OBS["Traces and metrics"]
-    MCP --> KB["Runbooks and knowledge base"]
-    ORCH --> SAFE["Redaction and policy layer"]
-    SAFE --> LLM["Configured language model"]
-    ORCH --> REPORT["Evidence-backed report"]
-    ORCH --> EVAL["Tracing and evaluations"]
+    U["Engineer / Payment Ops"] --> A["Investigation API"]
+    A --> O["Investigation Orchestrator"]
+    O --> P["Scope & policy validation"]
+    P --> M["Read-only MCP tools"]
+    M --> S["Payment and operational sources"]
+    S --> E["Evidence normalization"]
+    E --> C["Deterministic correlation"]
+    C --> R["Redaction and minimization"]
+    R --> L["LLM reasoning"]
+    L --> V["Schema and citation validation"]
+    V --> I["Investigation report"]
 ```
 
-### Architectural principles
+The full flow and data contracts are documented in [Project flow](docs/project-flow.md), with supporting detail in [Architecture](docs/architecture.md), [Roadmap](docs/roadmap.md), and [Security](docs/security.md).
 
-1. **Evidence before explanation:** every material conclusion must reference retrieved evidence.
-2. **Deterministic work before model work:** filtering, parsing, ordering, correlation, and redaction should happen in code.
-3. **Least privilege:** the MCP server exposes purpose-built read operations rather than arbitrary shell execution.
-4. **Bounded investigations:** every request has explicit scope, time, and result-size limits.
-5. **Provider independence:** model and observability integrations use adapters.
-6. **Graceful uncertainty:** missing evidence results in an `insufficient_evidence` outcome, not invented certainty.
+## Planned read-only tools
 
-## Initial technology direction
+| Tool | Purpose |
+|---|---|
+| `get_transaction` | Retrieve normalized transaction state and identifiers |
+| `get_payment_events` | Retrieve payment lifecycle events |
+| `search_logs` | Search approved logs by identifier, service, and time |
+| `get_trace` | Retrieve a distributed trace |
+| `get_service_metrics` | Retrieve approved service and dependency metrics |
+| `get_kubernetes_events` | Retrieve workload and deployment events |
+| `get_provider_context` | Retrieve normalized provider request/response evidence |
+| `find_related_transactions` | Find transactions with the same bounded failure pattern |
+| `get_reconciliation_context` | Compare transaction, reversal, provider, and settlement state |
+| `find_runbook` | Retrieve relevant operational guidance |
 
-The exact implementation will be confirmed through short architecture spikes.
+Every response carries a stable evidence ID, source and timestamp, correlation identifiers, redaction metadata, and provenance information.
 
-| Area | Initial choice | Reason |
-|---|---|---|
-| MCP tools | TypeScript and MCP SDK | Strong ecosystem support and small tool surface |
-| Investigation API | Java 21+ and Spring Boot | Production-grade service foundation and alignment with payment-system experience |
-| AI integration | Spring AI or provider-neutral adapter | Structured outputs, tool calling, and model portability |
-| Local cluster | Kind or Minikube | Reproducible Kubernetes demo |
-| Synthetic services | Spring Boot services | Realistic distributed transaction flow |
-| Messaging | Kafka-compatible local broker | Retry and asynchronous-processing scenarios |
-| Telemetry | OpenTelemetry | Vendor-neutral traces, metrics, and logs |
-| Trace backend | Grafana Tempo | Local distributed tracing |
-| Log backend | Grafana Loki | Central log queries without pod-by-pod downloads |
-| Metrics | Prometheus | Service and dependency signals |
-| Evaluation | Versioned JSONL cases and test runner | Repeatable, reviewable quality checks |
+## Architectural principles
 
-## MCP tool contract—first iteration
+1. **Evidence before explanation:** every material conclusion must cite supporting evidence.
+2. **Deterministic work before model work:** parsing, ordering, correlation, comparison, and redaction happen in code.
+3. **Technical state is not financial state:** a platform timeout does not prove provider decline or failed authorization.
+4. **Least privilege:** models receive purpose-built read operations, never arbitrary shell, SQL, or Kubernetes access.
+5. **Bounded investigations:** every request has explicit scope, time, source, and result-size limits.
+6. **Graceful uncertainty:** missing evidence produces an explicit uncertainty outcome, not fabricated certainty.
+7. **Provider independence:** model, telemetry, provider, and storage integrations use adapters.
 
-The model will not receive a generic `kubectl` or terminal tool. It will use constrained operations such as:
+## Technology direction
 
-| Tool | Purpose | Important limits |
-|---|---|---|
-| `list_workloads` | Discover allowed workloads | Allowlisted namespaces only |
-| `search_logs` | Search logs using identifiers and time | Maximum window and result count |
-| `get_trace` | Retrieve a distributed trace | Exact trace ID or bounded search |
-| `get_kubernetes_events` | Retrieve relevant cluster events | Read-only and namespace-scoped |
-| `get_service_metrics` | Query selected operational metrics | Approved queries and time range |
-| `find_runbook` | Retrieve relevant operational guidance | Curated knowledge source only |
+| Area | Initial choice |
+|---|---|
+| MCP tools | TypeScript and MCP SDK |
+| Investigation API | Java 21+ and Spring Boot |
+| AI integration | Spring AI or a provider-neutral adapter |
+| Local cluster | Kind or Minikube |
+| Synthetic services | Spring Boot services |
+| Messaging | Kafka-compatible local broker |
+| Telemetry | OpenTelemetry |
+| Logs, traces, metrics | Loki, Tempo, Prometheus |
+| Evaluation | Versioned JSONL cases and test runner |
 
-Every tool response will contain stable evidence IDs so the final report can cite its basis.
+## Delivery sequence
+
+- **Phase 1 — Payment evidence path:** reconstruct one synthetic transaction end to end without an LLM.
+- **Phase 2 — AI-assisted investigation:** generate only evidence-linked, schema-validated explanations.
+- **Phase 3 — Related failure detection:** determine whether an incident is isolated or systemic.
+- **Phase 4 — Reconciliation intelligence:** distinguish technical failure from financial outcome.
+- **Phase 5 — Evaluation and security:** add labelled cases, adversarial tests, redaction tests, and regression gates.
+- **Phase 6 — Portfolio release:** authentication, audit trail, dashboard, demo, published results, and `v0.1.0`.
 
 ## Repository structure
 
 ```text
 paylens-ops-ai/
 ├── apps/
-│   ├── investigation-api/       # Spring Boot orchestration API
-│   └── demo-services/           # Synthetic distributed payment workflow
+│   ├── investigation-api/
+│   └── demo-services/
 ├── packages/
-│   ├── k8s-mcp-server/          # Read-only MCP tools
-│   ├── evidence-model/          # Shared event and report schemas
-│   └── evaluation-runner/       # Quality and regression evaluations
+│   ├── ops-mcp-server/
+│   ├── evidence-model/
+│   ├── correlation-engine/
+│   └── evaluation-runner/
 ├── deploy/
-│   ├── local/                   # Kind/Minikube manifests
-│   └── observability/           # OpenTelemetry, Loki, Tempo, Prometheus
+│   ├── local/
+│   └── observability/
 ├── datasets/
-│   └── synthetic-incidents/     # Sanitized evaluation cases
+│   └── synthetic-incidents/
 ├── docs/
 │   ├── architecture.md
+│   ├── project-flow.md
 │   ├── roadmap.md
 │   └── security.md
 └── README.md
 ```
 
-## Delivery roadmap
+## Non-goals
 
-### Milestone 0 — Foundation
+- Replacing engineers, SREs, payment operations, or formal incident management.
+- Granting an LLM unrestricted production access.
+- Executing refunds, reversals, transaction updates, deployment changes, shell commands, or arbitrary SQL.
+- Treating model-generated text as evidence.
+- Sending raw production logs or payment data to an external model.
 
-- [x] Define the problem, boundaries, and initial architecture.
-- [x] Establish public documentation and contribution conventions.
-- [ ] Create architecture decision records for the language and model integration.
-- [ ] Add CI for documentation, Java, TypeScript, and secret scanning.
+## Evaluation
 
-### Milestone 1 — Deterministic local investigation
+Quality will be measured using root-cause accuracy, evidence precision and recall, timeline accuracy, payment-state accuracy, related-transaction accuracy, reconciliation accuracy, citation validity, unsupported-claim rate, latency, and model cost.
 
-- [ ] Run synthetic payment services in a local Kubernetes cluster.
-- [ ] Generate correlated JSON logs and OpenTelemetry traces.
-- [ ] Implement scoped `search_logs` and `get_trace` MCP tools.
-- [ ] Reconstruct a request timeline without an LLM.
-- [ ] Return a structured evidence bundle.
+## Project boundary
 
-### Milestone 2 — AI-assisted analysis
-
-- [ ] Add provider-neutral LLM integration.
-- [ ] Produce schema-validated investigation reports.
-- [ ] Require evidence references for every hypothesis.
-- [ ] Add uncertainty and insufficient-evidence outcomes.
-- [ ] Trace model calls, tool calls, latency, and token usage.
-
-### Milestone 3 — Safety and evaluation
-
-- [ ] Add configurable redaction policies.
-- [ ] Add prompt-injection and malicious-log test cases.
-- [ ] Create at least 25 labelled synthetic incidents.
-- [ ] Measure evidence precision, cause accuracy, citation validity, latency, and cost.
-- [ ] Add regression gates to CI.
-
-### Milestone 4 — Portfolio-quality release
-
-- [ ] Add a minimal investigation dashboard.
-- [ ] Publish architecture and threat-model documentation.
-- [ ] Record a three-minute end-to-end demo.
-- [ ] Publish benchmark results and known limitations.
-- [ ] Tag `v0.1.0`.
-
-See [the detailed roadmap](docs/roadmap.md).
-
-## Evaluation strategy
-
-The project will not be judged by whether a demo answer sounds convincing. Each synthetic incident will include:
-
-- A known initiating fault.
-- Expected services and event sequence.
-- Relevant and irrelevant evidence.
-- Required conclusions and prohibited unsupported claims.
-- Expected uncertainty when evidence is intentionally missing.
-
-Initial quality measures:
-
-| Metric | What it measures |
-|---|---|
-| Evidence precision | How much retrieved evidence is relevant |
-| Evidence recall | Whether required events were retrieved |
-| Timeline accuracy | Whether event order and service attribution are correct |
-| Root-cause accuracy | Whether the initiating fault is identified |
-| Citation validity | Whether cited evidence supports each claim |
-| Unsupported-claim rate | How often the report exceeds its evidence |
-| Investigation latency | End-to-end response time |
-| Investigation cost | Model and infrastructure cost per case |
-
-## Security model
-
-Operational logs are sensitive. Before any real-environment integration, the project must enforce:
-
-- Dedicated read-only service accounts and narrowly scoped RBAC.
-- No access to Kubernetes Secrets.
-- Environment, namespace, workload, time-window, and row-count restrictions.
-- Redaction before persistence or transmission to a model.
-- Encryption in transit and at rest.
-- Authentication, authorization, and immutable audit trails.
-- Explicit retention policies.
-- Separation of synthetic demo mode from enterprise integrations.
-
-See [the security and threat model](docs/security.md).
-
-## Local development
-
-There is no runnable release yet. The first implementation will target:
-
-```text
-Java 21+
-Node.js 22+
-Docker
-Kind or Minikube
-```
-
-Setup commands will be added with Milestone 1. Until then, start with the open tasks in the roadmap rather than expecting a functioning application.
-
-## Portfolio narrative
-
-This project demonstrates the engineering required around AI models:
-
-- Distributed systems and Kubernetes operations.
-- MCP and constrained tool calling.
-- Retrieval and evidence grounding.
-- Structured model outputs.
-- Security and privacy controls for financial systems.
-- Observability and LLMOps.
-- Evaluation-driven AI development.
-- Production-minded failure handling.
-
-The intended outcome is not “a chatbot for logs.” It is a dependable investigation system whose conclusions can be reviewed, challenged, and audited.
+PayLens Ops AI is an independent open-source and portfolio project. It must not contain or depend on employer source code, credentials, production logs, confidential architecture, customer information, private payment data, or proprietary operational procedures. Public demos and datasets use synthetic or explicitly public data only.
 
 ## Contributing
 
-The project is in its foundation phase. Issues should describe the user problem, proposed scope, security impact, and acceptance criteria. See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Disclaimer
-
-PayLens Ops AI is an independent portfolio and open-source project. It does not contain, connect to, or represent any employer's proprietary systems, source code, credentials, production logs, customer information, or confidential architecture. All demonstrations and evaluation datasets must use synthetic or explicitly public data.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Issues should state the user problem, scope, security impact, and acceptance criteria.
 
 ## License
 
